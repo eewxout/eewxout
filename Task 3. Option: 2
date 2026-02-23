@@ -1,0 +1,139 @@
+type Currency = "RUB"
+type Money = {amount: number; currency: Currency}
+type InvoiceStatus = "draft" | "issued" | "paid" | "void"
+type PaymentResult =
+    | {ok: true; paidAt: string}
+    | {ok: false; reason: "declined" | "network_error"}
+
+interface PaymentMethod {
+    pay(invoice: Invoice, amount: Money): PaymentResult
+}
+
+
+interface Billable {
+    title: string
+    total(): Money
+}
+
+abstract class InvoiceLine implements Billable {
+    public readonly title: string
+
+
+    protected constructor(title: string, protected readonly qty: number) {
+        this.title = title
+    }
+
+    protected abstract unitPrice(): Money
+
+    public total(): Money {
+        const price = this.unitPrice()
+        return {amount: price.amount * this.qty, currency: price.currency}
+    }
+}
+
+class LaborLine extends InvoiceLine {
+    constructor(title: string, qtyHours: number, private readonly rubPerHour: number){
+        super(title, qtyHours)
+    }
+    protected unitPrice(): Money {
+        return {amount: this.rubPerHour, currency: "RUB"}
+    }
+}
+
+
+class PartLine extends InvoiceLine {
+    private readonly taxRate: number = 0.20; 
+    public readonly priceTotal: number; 
+
+    constructor(title: string, qty: number, private readonly pricePerUnit: number){
+        super(title, qty)
+        const basePrice = pricePerUnit * qty;
+        this.priceTotal = basePrice + (basePrice * this.taxRate);
+    }
+    
+    protected unitPrice(): Money {
+        return {amount: this.pricePerUnit, currency: "RUB"}
+    }
+    
+    public total(): Money {
+        return {
+            amount: this.priceTotal,
+            currency: "RUB"
+        };
+    }
+}
+
+class Invoice {
+    private status: InvoiceStatus = "draft"
+
+    constructor(public readonly id: string, private readonly Lines: Billable[]){}
+
+    public issue(): void{
+        if (this.status !== "draft") {
+            throw new Error("Can issue only from draft")
+        }
+        this.status = "issued"
+    }
+    public markPaid(): void{
+        if (this.status !== "issued") {
+            throw new Error("Can paid only issued Invoice")
+        }
+        this.status = "paid"
+    }
+    public getStatus(): InvoiceStatus {
+        return this.status
+    }
+    public getLines(): readonly Billable[]{
+        return this.Lines
+    }
+}
+
+class CashPayment implements PaymentMethod {
+    pay(invoice:Invoice, amount: Money): PaymentResult{
+        if (invoice.getStatus() !== "issued") {
+            return {ok: false, reason: "declined"}
+        }
+        return {ok: true, paidAt: new Date().toISOString()}
+    }
+}
+
+class InvoiceCalculator {
+    public sum(Lines: readonly Billable[]): Money {
+        return Lines.reduce(
+            (acc, line) => ({amount: acc.amount + line.total().amount, currency: "RUB"}),
+            {amount: 0, currency: "RUB"}
+        )
+    }
+}
+
+function demo(): Invoice {
+    const lines = [
+        new LaborLine("Диагностика", 2, 1500),
+        new LaborLine("Подготовка", 4, 2000),
+        new LaborLine("Монтаж", 10, 6000),
+        new LaborLine("Выравнивание", 2, 1500),
+        
+        //партлайн
+        new PartLine("Тормозные колодки", 2, 2500),  
+        new PartLine("Топливный насос", 1, 3500),    
+        new PartLine("Воздушный фильтр", 1, 1200)   
+    ]
+    const invoice = new Invoice("INV-2026-0001", lines)
+    return invoice
+}
+
+function getResult(invoice: Invoice){
+    invoice.issue()
+    const calculator = new InvoiceCalculator()
+
+    const total: Money = calculator.sum(invoice.getLines())
+
+    const payment = new CashPayment()
+    const result = payment.pay(invoice, total)
+
+    console.log("Детали счета:", invoice)
+    console.log(result)
+}
+
+const invoice = demo()
+getResult(invoice)
