@@ -1,0 +1,46 @@
+class Animal {
+    static total = 0;
+    
+    constructor(
+        public species: 'dog' | 'cat',
+        public name: string,
+        public birthDate: Date
+    ) {}
+    
+    get age() {
+        const today = new Date();
+        let a = today.getFullYear() - this.birthDate.getFullYear();
+        if (today.getMonth() < this.birthDate.getMonth() || 
+            (today.getMonth() === this.birthDate.getMonth() && today.getDate() < this.birthDate.getDate())) {
+            a--;
+        }
+        return a;
+    }
+    
+    static create(s: 'dog' | 'cat', n: string, d: Date) {
+        const temp = new Animal(s, n, d);
+        const age = temp.age;
+        
+        if (age < 0) throw new Error('Ошибка');
+        if (age > 30) throw new Error('Ошибка');
+        
+        Animal.total++;
+        return new Animal(s, n, d);
+    }
+}
+
+try {
+    const dog = Animal.create('dog', 'Rex', new Date('1900-05-15'));
+    console.log('Создан:', `${dog.name}`); 
+} catch (error) {
+    const e = error as Error; 
+    console.log(e.message); 
+}
+
+try {
+    const cat = Animal.create('cat', 'Barsik', new Date('2024-01-01')); 
+    console.log('Создан:', `${cat.name}`);
+} catch (error) {
+    const e = error as Error; 
+    console.log(e.message); 
+}
